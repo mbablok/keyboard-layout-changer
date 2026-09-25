@@ -1,1 +1,72 @@
 # keyboard-layout-changer
+
+A tiny macOS menu bar app that makes a USB PC keyboard (a THOR 303 TKL by default) Mac-like
+with one click. It runs the same `hidutil` command as the `swap-cmd-option-keys` fish function,
+so after you reconnect the keyboard you click the menu bar icon instead of opening a terminal.
+
+## What it does
+
+- Keyboard icon in the menu bar, no Dock icon (`LSUIElement`).
+- **Swap Command/Option Keys** runs:
+
+  ```sh
+  /usr/bin/hidutil property \
+    --matching '{"VendorID":0x331a,"ProductID":0x5018}' \
+    --set "<mapping>"
+  ```
+
+  `<mapping>` is the contents of `~/.hidutil-swap-cmd-opt.json` when that file exists, otherwise a
+  built-in copy of the same mapping (swap left Command/Option, right Control → right Option,
+  Application key → right Command). It does not use fish or your login shell.
+- Confirmation: the icon turns into a checkmark on success or a warning triangle on failure, then
+  goes back to the keyboard after about two seconds. No windows, notifications or sounds.
+- On failure the menu shows the error text (and a **Copy Error** item) until the next successful run.
+  If the keyboard is unplugged, hidutil matches nothing; the app reports "Keyboard not found".
+- **Launch at Login** toggle (uses `SMAppService.mainApp`) and **Quit**.
+
+## Requirements
+
+macOS 13 or later and the Xcode command line tools (Swift 5.9+).
+
+## Build, test, install
+
+```sh
+make test      # unit tests
+make app       # Release build, assembled into build/KeyboardLayoutChanger.app (ad-hoc signed)
+make install   # builds, copies to ~/Applications and launches it
+make install INSTALL_DIR=/Applications   # install somewhere else
+make uninstall
+```
+
+`make install` quits a running copy first, so it is also how you upgrade.
+
+## Launch at login
+
+Open the menu and turn on **Launch at Login**. macOS may ask you to approve it in
+System Settings → General → Login Items. The app is only ad-hoc signed, so after reinstalling a new
+build you may need to toggle the setting off and on again so the login item points at the new binary.
+
+## Changing the matched keyboard
+
+1. Find the keyboard's IDs: `hidutil list --matching keyboard` (the `VendorID` and `ProductID`
+   columns; write them as hex, e.g. `0x331a`).
+2. Edit `keyboardMatchingJSON` in `Sources/KeyboardLayoutChanger/HidutilCommand.swift`.
+3. `make install`.
+
+To change *what* gets remapped, edit `~/.hidutil-swap-cmd-opt.json`; the app reads it on every
+click, so no rebuild is needed. The built-in fallback lives in
+`Sources/KeyboardLayoutChanger/KeyMapping.swift`.
+
+## Why a Swift Package
+
+The project is a plain Swift Package with one executable target plus tests rather than an Xcode
+project: everything is text files that diff cleanly, `swift build`/`swift test` work from the
+command line without opening Xcode, and there are no generated `.xcodeproj` settings to maintain.
+The `.app` bundle is small enough to assemble in the `Makefile` (binary + `Resources/Info.plist`
++ ad-hoc `codesign`). The app is not sandboxed, because it has to run `/usr/bin/hidutil`.
+
+## Possible follow-ups
+
+- Apply the mapping automatically when the keyboard is reconnected or the Mac wakes
+  (e.g. via IOKit device-matching notifications or `NSWorkspace.didWakeNotification`).
+- Developer ID signing and notarization for distribution.
