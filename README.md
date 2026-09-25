@@ -15,9 +15,10 @@ so after you reconnect the keyboard you click the menu bar icon instead of openi
     --set "<mapping>"
   ```
 
-  `<mapping>` is the contents of `~/.hidutil-swap-cmd-opt.json` when that file exists, otherwise a
-  built-in copy of the same mapping (swap left Command/Option, right Control → right Option,
-  Application key → right Command). It does not use fish or your login shell.
+  `<mapping>` is the contents of `~/.hidutil-swap-cmd-opt.json`, read on every click — the same file
+  the fish function `cat`s. If it is missing or unreadable the app reports
+  `mapping file not found or unreadable: <path>` and does not run `hidutil`; there is no built-in
+  copy it could silently apply instead. It does not use fish or your login shell.
 - Confirmation: the icon turns into a checkmark on success or a warning triangle on failure, then
   goes back to the keyboard after about two seconds. No windows, notifications or sounds.
 - On failure the menu shows the error text (and a **Copy Error** item) until the next successful run.
@@ -42,9 +43,12 @@ make uninstall
 
 ## Launch at login
 
-Open the menu and turn on **Launch at Login**. macOS may ask you to approve it in
-System Settings → General → Login Items. The app is only ad-hoc signed, so after reinstalling a new
-build you may need to toggle the setting off and on again so the login item points at the new binary.
+The app registers itself as a login item on launch, so it starts at login without any setup. macOS
+may still ask you to approve it in System Settings → General → Login Items; while approval is
+pending the menu says so instead of pretending the item is on. Turning **Launch at Login** off
+unregisters the app and is remembered, so later launches leave it off. The app is only ad-hoc
+signed, so after reinstalling a new build macOS may stop recognizing the login item; the menu
+reports that too, and turning the toggle on again points it at the new binary.
 
 ## Changing the matched keyboard
 
@@ -54,8 +58,8 @@ build you may need to toggle the setting off and on again so the login item poin
 3. `make install`.
 
 To change *what* gets remapped, edit `~/.hidutil-swap-cmd-opt.json`; the app reads it on every
-click, so no rebuild is needed. The built-in fallback lives in
-`Sources/KeyboardLayoutChanger/KeyMapping.swift`.
+click, so no rebuild is needed. That file is the only mapping the app knows about
+(`Sources/KeyboardLayoutChanger/KeyMapping.swift`).
 
 ## Why a Swift Package
 

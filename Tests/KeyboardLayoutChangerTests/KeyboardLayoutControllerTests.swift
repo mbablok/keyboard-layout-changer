@@ -111,6 +111,55 @@ final class KeyboardLayoutControllerTests: XCTestCase {
         XCTAssertEqual(controller.status, .idle)
     }
 
+    func testARunThatFinishesLateLeavesANewerRunAlone() async {
+        var pending: CheckedContinuation<CommandResult, Never>?
+        var runs = 0
+        let controller = KeyboardLayoutController(
+            loadMapping: { "MAPPING" },
+            run: { _ in
+                runs += 1
+                if runs == 1 {
+                    return await withCheckedContinuation { pending = $0 }
+                }
+                return CommandResult(exitCode: 0, output: "matched")
+            },
+            sleep: { _ in }
+        )
+
+        let stale = Task { await controller.apply() }
+        while pending == nil { await Task.yield() }
+        await controller.apply()
+        XCTAssertEqual(controller.status, .idle)
+
+        pending?.resume(returning: CommandResult(exitCode: 0, output: ""))
+        await stale.value
+
+        XCTAssertEqual(runs, 2)
+        XCTAssertEqual(controller.status, .idle)
+        XCTAssertNil(controller.lastError)
+    }
+
+    func testAnUnreadableMappingFileFailsWithoutRunningHidutil() async {
+        let mappingURL = URL(fileURLWithPath: "/tmp/absent-hidutil-mapping.json")
+        var ran: [HidutilCommand] = []
+        var shownWhileWaiting: [ApplyStatus] = []
+        var controller: KeyboardLayoutController!
+        controller = KeyboardLayoutController(
+            loadMapping: { throw MappingFileError(url: mappingURL) },
+            run: { command in
+                ran.append(command)
+                return CommandResult(exitCode: 0, output: "matched")
+            },
+            sleep: { _ in shownWhileWaiting.append(controller.status) }
+        )
+
+        await controller.apply()
+
+        XCTAssertTrue(ran.isEmpty)
+        XCTAssertEqual(shownWhileWaiting, [.failed])
+        XCTAssertEqual(controller.lastError, "mapping file not found or unreadable: \(mappingURL.path)")
+    }
+
     func testSilentSuccessMeansTheKeyboardWasNotFound() async {
         var shownWhileWaiting: [ApplyStatus] = []
         var controller: KeyboardLayoutController!

@@ -3,7 +3,7 @@ import SwiftUI
 @main
 struct KeyboardLayoutChangerApp: App {
     @StateObject private var controller = KeyboardLayoutController(
-        loadMapping: { KeyMapping.load() },
+        loadMapping: { try KeyMapping.load() },
         run: { try await ProcessRunner.run($0) },
         sleep: { try? await Task.sleep(for: $0) }
     )
@@ -27,6 +27,7 @@ struct KeyboardLayoutChangerApp: App {
                 get: { launchAtLogin.isEnabled },
                 set: { launchAtLogin.set($0) }
             ))
+            .task { launchAtLogin.refresh() }
             if let error = launchAtLogin.lastError {
                 Text("Launch at login: \(error)")
             }

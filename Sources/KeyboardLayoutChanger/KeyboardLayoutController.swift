@@ -19,15 +19,15 @@ final class KeyboardLayoutController: ObservableObject {
     /// Error text from the last failed run, kept until the next success.
     @Published private(set) var lastError: String?
 
-    private let loadMapping: @MainActor () -> String
+    private let loadMapping: @MainActor () throws -> String
     private let run: @MainActor (HidutilCommand) async throws -> CommandResult
     private let sleep: @MainActor (Duration) async -> Void
     private let revertDelay: Duration
-    /// Identifies the latest run, so an older run's timer cannot revert a newer result.
+    /// Identifies the latest run, so an older run can neither report nor revert a newer result.
     private var runCount = 0
 
     init(
-        loadMapping: @escaping @MainActor () -> String,
+        loadMapping: @escaping @MainActor () throws -> String,
         run: @escaping @MainActor (HidutilCommand) async throws -> CommandResult,
         sleep: @escaping @MainActor (Duration) async -> Void,
         revertDelay: Duration = .seconds(2)
@@ -41,9 +41,15 @@ final class KeyboardLayoutController: ObservableObject {
     func apply() async {
         runCount += 1
         let thisRun = runCount
-        let command = HidutilCommand(mappingJSON: loadMapping())
-        if let error = await failure(of: command) {
-            lastError = error
+        let failureText: String?
+        do {
+            failureText = await failure(of: HidutilCommand(mappingJSON: try loadMapping()))
+        } catch {
+            failureText = error.localizedDescription
+        }
+        guard thisRun == runCount else { return }
+        if let failureText {
+            lastError = failureText
             status = .failed
         } else {
             lastError = nil
